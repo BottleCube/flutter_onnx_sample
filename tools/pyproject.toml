@@ -13,3 +13,4 @@ dependencies = [
 
 [project.scripts]
 export-model = "main:main"
+build-index = "build_index:main"

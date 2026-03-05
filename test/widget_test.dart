@@ -11,10 +11,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:vectorize/main.dart';
 
 void main() {
-  testWidgets('shows ONNX smoke test UI', (WidgetTester tester) async {
+  testWidgets('shows semantic search UI', (WidgetTester tester) async {
     await tester.pumpWidget(const MyApp());
 
-    expect(find.widgetWithText(ElevatedButton, 'Vectorize'), findsOneWidget);
-    expect(find.text('Input text'), findsOneWidget);
+    expect(find.widgetWithText(ElevatedButton, 'Search'), findsOneWidget);
+    expect(find.text('Search word'), findsOneWidget);
+    expect(find.text('Semantic Search'), findsOneWidget);
   });
 }

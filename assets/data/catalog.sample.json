@@ -1,0 +1,22 @@
+{
+  "items": [
+    {
+      "id": "book-001",
+      "title": "Deep Learning with Python",
+      "summary": "Neural networks, practical model training, and deep learning concepts.",
+      "genre": "Technology"
+    },
+    {
+      "id": "album-001",
+      "title": "Kind of Blue",
+      "summary": "Modal jazz album with a calm and introspective atmosphere.",
+      "genre": "Jazz"
+    },
+    {
+      "id": "book-002",
+      "title": "The Pragmatic Programmer",
+      "summary": "Software craftsmanship and practical engineering habits for developers.",
+      "genre": "Software Engineering"
+    }
+  ]
+}

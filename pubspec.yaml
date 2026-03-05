@@ -24,3 +24,4 @@ flutter:
   assets:
     - assets/models/BAAI_bge-small-en-v1.5.onnx
     - assets/models/vocab.txt
+    - assets/data/search_index.json

@@ -8,19 +8,6 @@ import 'package:path_provider/path_provider.dart';
 
 import 'bert_wordpiece_tokenizer.dart';
 
-/// UI 層へ返す推論結果。
-/// - `embedding`: mean pooling 後の文ベクトル
-/// - `tokens`: 実際にモデルへ入れた token 列（PAD を除く）
-class VectorizationResult {
-  VectorizationResult({
-    required this.embedding,
-    required this.tokens,
-  });
-
-  final List<double> embedding;
-  final List<String> tokens;
-}
-
 /// 文字列のベクトル化に必要な処理をまとめたサービス。
 /// 役割:
 /// 1. ONNX Runtime の初期化/解放
@@ -58,7 +45,7 @@ class VectorizerService {
     _session = await OnnxRuntime().createSession(modelPath);
   }
 
-  Future<VectorizationResult> vectorize(String text) async {
+  Future<List<double>> embed(String text) async {
     final session = _session;
     final tokenizer = _tokenizer;
     if (session == null || tokenizer == null) {
@@ -93,15 +80,7 @@ class VectorizerService {
       final tensorData = await outputValue.asList();
 
       // last_hidden_state を attention_mask 付き mean pooling して文ベクトル化。
-      final embedding = _meanPoolEmbedding(tensorData, encoded.attentionMask);
-      // 画面表示用 token からは PAD を除外する。
-      final nonPadLength = encoded.attentionMask.where((m) => m == 1).length;
-      final tokenIds = encoded.inputIds.take(nonPadLength).toList(growable: false);
-
-      return VectorizationResult(
-        embedding: embedding,
-        tokens: tokenizer.decodeIds(tokenIds),
-      );
+      return _meanPoolEmbedding(tensorData, encoded.attentionMask);
     } finally {
       // 推論ごとに生成した native tensor を確実に解放する。
       if (outputs != null) {
