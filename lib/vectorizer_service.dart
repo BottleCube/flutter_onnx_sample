@@ -1,5 +1,10 @@
+import 'dart:async';
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:flutter/services.dart';
-import 'package:onnxruntime/onnxruntime.dart';
+import 'package:flutter_onnxruntime/flutter_onnxruntime.dart';
+import 'package:path_provider/path_provider.dart';
 
 import 'bert_wordpiece_tokenizer.dart';
 
@@ -34,23 +39,23 @@ class VectorizerService {
   final int maxLength;
 
   OrtSession? _session;
-  OrtSessionOptions? _sessionOptions;
   BertWordPieceTokenizer? _tokenizer;
-  bool _ortInitialized = false;
 
   Future<void> initialize() async {
-    // ONNX Runtime を初期化し、モデルセッションを構築する。
-    OrtEnv.instance.init();
-    _ortInitialized = true;
-    _sessionOptions = OrtSessionOptions();
+    await _closeSession();
 
-    // モデル本体と語彙辞書をアセットから読み込む。
-    final modelBytes = (await rootBundle.load(modelAssetPath)).buffer.asUint8List();
+    // flutter_onnxruntime の createSession は通常のファイルパスを受け取る。
+    // Flutter asset はそのままネイティブ側へ渡せないため、いったん実ファイル化する。
+    // createSessionFromAsset も使えるが、内部キャッシュで古いモデルが残りうるので、
+    // asset を差し替えた際に確実に反映されるよう毎回上書きしている。
+    final modelPath = await _writeModelAssetToTempFile();
+
+    // 語彙辞書をアセットから読み込む。
     final vocabText = await rootBundle.loadString(vocabAssetPath);
 
     // tokenizer / session を組み立て、以降の推論で再利用する。
     _tokenizer = BertWordPieceTokenizer.fromVocabText(vocabText);
-    _session = OrtSession.fromBuffer(modelBytes, _sessionOptions!);
+    _session = await OnnxRuntime().createSession(modelPath);
   }
 
   Future<VectorizationResult> vectorize(String text) async {
@@ -65,56 +70,73 @@ class VectorizerService {
 
     // 入力文を固定長 (maxLength) の input_ids / attention_mask に変換。
     final encoded = tokenizer.encode(text, maxLength: maxLength);
-    final inputTensor = OrtValueTensor.createTensorWithDataList(
-      encoded.inputIds,
+    final inputTensor = await OrtValue.fromList(
+      Int64List.fromList(encoded.inputIds),
       [1, maxLength],
     );
-    final attentionTensor = OrtValueTensor.createTensorWithDataList(
-      encoded.attentionMask,
+    final attentionTensor = await OrtValue.fromList(
+      Int64List.fromList(encoded.attentionMask),
       [1, maxLength],
     );
-    final runOptions = OrtRunOptions();
 
+    Map<String, OrtValue>? outputs;
     try {
       // ONNX 推論実行。
-      final outputs = session.run(
-        runOptions,
-        {'input_ids': inputTensor, 'attention_mask': attentionTensor},
-      );
-      final firstTensor = outputs.firstWhere((value) => value is OrtValueTensor);
+      outputs = await session.run({
+        'input_ids': inputTensor,
+        'attention_mask': attentionTensor,
+      });
+      final outputValue = outputs['last_hidden_state'];
+      if (outputValue == null) {
+        throw StateError('Model output "last_hidden_state" is missing.');
+      }
+      final tensorData = await outputValue.asList();
+
       // last_hidden_state を attention_mask 付き mean pooling して文ベクトル化。
-      final embedding = _meanPoolEmbedding(
-        (firstTensor as OrtValueTensor).value,
-        encoded.attentionMask,
-      );
+      final embedding = _meanPoolEmbedding(tensorData, encoded.attentionMask);
       // 画面表示用 token からは PAD を除外する。
       final nonPadLength = encoded.attentionMask.where((m) => m == 1).length;
       final tokenIds = encoded.inputIds.take(nonPadLength).toList(growable: false);
-
-      // onnxruntime が返した出力バッファを解放。
-      for (final output in outputs) {
-        output?.release();
-      }
 
       return VectorizationResult(
         embedding: embedding,
         tokens: tokenizer.decodeIds(tokenIds),
       );
     } finally {
-      // 入出力 tensor と run options は毎回作るため必ず解放する。
-      runOptions.release();
-      inputTensor.release();
-      attentionTensor.release();
+      // 推論ごとに生成した native tensor を確実に解放する。
+      if (outputs != null) {
+        for (final output in outputs.values) {
+          await output.dispose();
+        }
+      }
+      await inputTensor.dispose();
+      await attentionTensor.dispose();
     }
   }
 
   void dispose() {
-    // initialize 済みリソースを破棄する。
-    _session?.release();
-    _sessionOptions?.release();
-    if (_ortInitialized) {
-      OrtEnv.instance.release();
+    unawaited(_closeSession());
+  }
+
+  Future<void> _closeSession() async {
+    final session = _session;
+    _session = null;
+    if (session != null) {
+      await session.close();
     }
+  }
+
+  Future<String> _writeModelAssetToTempFile() async {
+    final data = await rootBundle.load(modelAssetPath);
+    final directory = await getTemporaryDirectory();
+    final fileName = modelAssetPath.split('/').last;
+    final file = File('${directory.path}${Platform.pathSeparator}$fileName');
+    await file.parent.create(recursive: true);
+    await file.writeAsBytes(
+      data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+      flush: true,
+    );
+    return file.path;
   }
 
   static List<double> _meanPoolEmbedding(

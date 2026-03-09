@@ -8,7 +8,7 @@ Usage:
 Options:
     --model TEXT     HuggingFace モデル名 (default: BAAI/bge-small-en-v1.5)
     --output PATH    出力先ディレクトリ (default: ../assets/models)
-    --target-ir-version INT  出力 ONNX の IR バージョン (default: 9)
+    --target-ir-version INT  出力 ONNX の IR バージョン (default: 10)
     --quantize       INT8 量子化を適用する
 """
 
@@ -156,8 +156,8 @@ def main() -> None:
     parser.add_argument(
         "--target-ir-version",
         type=int,
-        default=9,
-        help="出力 ONNX の IR バージョン (default: 9)",
+        default=10,
+        help="出力 ONNX の IR バージョン (default: 10)",
     )
     args = parser.parse_args()
 

@@ -11,7 +11,7 @@ Flutter + ONNX Runtime でテキスト埋め込みをオンデバイス生成す
   - 推論結果として token 列と埋め込み次元、先頭 16 要素を表示
 - `lib/vectorizer_service.dart`
   - `assets/models/BAAI_bge-small-en-v1.5.onnx` と `assets/models/vocab.txt` を読み込み
-  - ONNX Runtime セッション初期化（`OrtSession.fromBuffer`）
+  - ONNX Runtime セッション初期化（`OnnxRuntime().createSessionFromAsset`）
   - `input_ids` / `attention_mask` をモデルに入力して推論
   - `last_hidden_state` を attention mask 付き mean pooling して文ベクトル化
 - `lib/bert_wordpiece_tokenizer.dart`
@@ -20,7 +20,7 @@ Flutter + ONNX Runtime でテキスト埋め込みをオンデバイス生成す
   - `[CLS] ... [SEP]` 付与、`maxLength=128` へパディング
 - `tools/main.py`
   - HuggingFace モデルを ONNX にエクスポート
-  - Flutter 側互換のため IR version 調整（既定: `9`）
+  - Flutter 側互換のため IR version 調整（既定: `10`）
   - 単一 `.onnx` ファイル保存（external data 無効）
   - 任意で INT8 量子化
 
@@ -59,7 +59,7 @@ uv run main.py --model BAAI/bge-small-en-v1.5 --output ../assets/models
 IR version を明示する場合:
 
 ```bash
-uv run main.py --model BAAI/bge-small-en-v1.5 --output ../assets/models --target-ir-version 9
+uv run main.py --model BAAI/bge-small-en-v1.5 --output ../assets/models --target-ir-version 10
 ```
 
 INT8 量子化する場合:
@@ -76,6 +76,6 @@ uv run main.py --model BAAI/bge-small-en-v1.5 --output ../assets/models --quanti
 ## トラブルシュート
 
 - `Unsupported model IR version` が出る場合:
-  - `tools/main.py` で `--target-ir-version 9` を指定して再生成してください。
+  - `tools/main.py` で `--target-ir-version 10` を指定して再生成してください。
 - 初期化失敗 (`Init failed`) の場合:
   - `pubspec.yaml` の asset パスとファイル実体が一致しているか確認してください。
